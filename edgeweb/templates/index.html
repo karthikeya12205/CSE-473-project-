@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EdgeWebAgent</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1f2430;--mut:#6b7280;--bd:#e3e6eb;--ac:#2563eb;--ok:#16a34a;--bad:#dc2626;--hl:#f59e0b;color-scheme:light}
+@media(prefers-color-scheme:dark){:root{--bg:#14161a;--card:#1d2026;--tx:#e8eaee;--mut:#9aa1ad;--bd:#2d323b;--ac:#60a5fa;--ok:#4ade80;--bad:#f87171;color-scheme:dark}}
+*{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+header{padding:14px 22px;border-bottom:1px solid var(--bd);background:var(--card);display:flex;gap:12px;align-items:baseline}
+header h1{font-size:18px;margin:0}header span{color:var(--mut)}
+nav{display:flex;gap:4px;padding:10px 22px 0}nav button{border:0;background:none;color:var(--mut);padding:8px 14px;border-bottom:2px solid transparent;cursor:pointer;font:inherit}
+nav button.on{color:var(--tx);border-color:var(--ac)}
+main{padding:16px 22px;max-width:1400px;margin:auto}.tab{display:none}.tab.on{display:block}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px}
+.bar{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-bottom:14px}
+label.f{display:flex;flex-direction:column;gap:4px;color:var(--mut);font-size:12px}
+select,input,textarea,button.b{font:inherit;padding:7px 10px;border:1px solid var(--bd);border-radius:7px;background:var(--card);color:var(--tx)}
+button.b{background:var(--ac);color:#fff;border:0;cursor:pointer}button.b.g{background:var(--card);color:var(--tx);border:1px solid var(--bd)}
+.grid{display:grid;grid-template-columns:1.4fr 1fr;gap:14px}@media(max-width:900px){.grid{grid-template-columns:1fr}}
+iframe{width:100%;height:420px;border:1px solid var(--bd);border-radius:8px;background:#fff}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 6px;border-bottom:1px solid var(--bd);text-align:left;vertical-align:top}th{color:var(--mut);font-weight:500}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;background:var(--bd)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.mut{color:var(--mut)}
+.log div{padding:6px 8px;border-radius:6px;cursor:pointer;display:flex;gap:8px}.log div.on{background:var(--bd)}
+h3{margin:0 0 8px;font-size:14px}.ctl{display:flex;gap:8px;align-items:center;margin:8px 0}
+input[type=range]{flex:1}textarea{width:100%;height:200px;font-family:monospace;font-size:12px}
+</style></head><body>
+<header><h1>🌐 EdgeWebAgent</h1><span>no-LLM browser agent · TF-IDF + LogReg grounder + rules</span></header>
+<nav><button class="on" data-t="run">Run agent</button><button data-t="bench">Benchmark</button><button data-t="insp">Inspect any HTML</button></nav>
+<main>
+<section class="tab on" id="run">
+ <div class="bar">
+  <label class="f">Task<select id="kind">{% for k in kinds %}<option>{{k}}</option>{% endfor %}</select></label>
+  <label class="f">Label phrasings<select id="vocab"><option value="train">seen (train)</option><option value="unseen">unseen</option><option value="mixed">mixed</option></select></label>
+  <label class="f">Seed<input id="seed" type="number" value="11" style="width:90px"></label>
+  <label class="f">Cookie banner<select id="pc"><option value=".5">random</option><option value="1">always</option><option value="0">never</option></select></label>
+  <label class="f">Pop-up<select id="pm"><option value=".3">random</option><option value="1">always</option><option value="0">never</option></select></label>
+  <label class="f">Fallbacks<select id="fb"><option value="1">on</option><option value="0">off</option></select></label>
+  <button class="b" onclick="run()">▶ Run agent</button><button class="b g" onclick="seed.value=Math.floor(Math.random()*9e4);run()">🎲 Random</button>
+ </div>
+ <div id="res" class="mut">Pick a task and press Run.</div>
+ <div class="grid" id="view" style="display:none;margin-top:12px">
+  <div class="card"><h3 id="goal"></h3><iframe id="fr" sandbox></iframe>
+   <div class="ctl"><button class="b g" onclick="go(-1)">◀</button><input type="range" id="sl" min="0" value="0" oninput="show(+this.value)"><button class="b g" onclick="go(1)">▶</button><button class="b g" id="pl" onclick="play()">Auto-play</button><span id="sn" class="mut"></span></div>
+   <div id="act"></div></div>
+  <div><div class="card" style="margin-bottom:14px"><h3>Steps</h3><div class="log" id="log"></div></div>
+   <div class="card"><h3>What the grounder sees on this page</h3><table id="els"></table></div></div>
+ </div>
+</section>
+<section class="tab" id="bench"><div class="bar">
+  <label class="f">Episodes per setting<input id="n" type="number" value="100" min="10" max="500" style="width:100px"></label>
+  <button class="b" onclick="bench()">Run benchmark</button></div><div class="card"><table id="bt"><tr><td class="mut">Compares seen vs. unseen phrasings, with and without DOM-prior fallbacks (notebook §7).</td></tr></table></div></section>
+<section class="tab" id="insp"><div class="card"><h3>Paste page HTML — the grounder labels each interactive element</h3>
+ <textarea id="ih"><label for="u">Handle</label><input id="u" type="text">
+<input type="password" placeholder="Passcode">
+<button>Let me in</button> <a href="#">Trouble signing in?</a>
+<button>Put in my bag</button></textarea>
+ <div class="ctl"><button class="b" onclick="insp()">Classify elements</button></div><table id="it"></table></div></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);let R=null,cur=0,timer=null;
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button,.tab').forEach(x=>x.classList.remove('on'));b.classList.add('on');$(b.dataset.t).classList.add('on')});
+const post=(u,d)=>fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)}).then(r=>r.json());
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function run(){
+  $('res').textContent='Running…';
+  R=await post('/api/run',{kind:$('kind').value,vocab:$('vocab').value,seed:$('seed').value,p_cookie:$('pc').value,p_modal:$('pm').value,fallback:$('fb').value==='1'});
+  $('res').innerHTML=`<span class="${R.success?'ok':'bad'}"><b>${R.success?'✔ Task completed':'✘ Task failed'}</b></span> · ${R.steps.length-1>=0?R.steps.length:0} steps · end: ${R.reason} · misclicks: ${R.misclicks} · errors: ${R.errors}`;
+  $('goal').textContent='Goal: '+R.goal;$('view').style.display='';$('sl').max=R.steps.length-1;
+  $('log').innerHTML=R.steps.map((s,i)=>{const a=s.action;return `<div onclick="show(${i})" id="l${i}"><span class="mut">${i+1}.</span><span><b>${a?a.op:'stuck'}</b> ${a&&a.role?`<span class="pill">${a.role}</span>`:''} ${a&&a.value!=null&&a.op!=='done'?'→ '+esc(a.value):''} <span class="${a&&a.ok===false?'bad':'mut'}">${a&&a.msg||''}</span></span></div>`}).join('');
+  show(0);
+}
+function show(i){
+  cur=i;const s=R.steps[i],a=s.action;$('sl').value=i;$('sn').textContent=`step ${i+1}/${R.steps.length} · plan ${s.ms} ms`;
+  document.querySelectorAll('.log div').forEach(d=>d.classList.remove('on'));$('l'+i).classList.add('on');
+  const hl=a&&a.id?`#${a.id}{outline:3px solid #f59e0b!important;outline-offset:2px}`:'';
+  const css=`<style>body{font:14px system-ui;padding:12px;color:#222}.row{margin:6px 0}label{margin-right:8px}.box{border:1px dashed #cbd5e1;padding:8px;margin:4px}.nav a{margin-right:10px}[role=dialog]{position:sticky;bottom:0;background:#fff;border:2px solid #333;padding:10px;margin-top:12px;box-shadow:0 0 0 999px rgba(0,0,0,.25)}button{margin:2px}li{margin:6px 0}[role=alert]{color:#b91c1c}${hl}</style>`;
+  $('fr').srcdoc=s.html.replace('</head>',css+'</head>');
+  $('act').innerHTML=a?`<p>Action: <b>${a.op}</b> ${a.role?`as <span class="pill">${a.role}</span>`:''} ${a.value!=null&&a.op!=='done'?`value <code>${esc(a.value)}</code>`:''} ${a.msg?`→ <span class="${a.ok?'ok':'bad'}">${a.msg}</span>`:''}</p>`:'<p class="bad">Agent is stuck (no confident action).</p>';
+  $('els').innerHTML='<tr><th>Element label</th><th>Predicted role</th><th>Conf.</th></tr>'+s.elements.map(e=>`<tr style="${a&&e.id===a.id?'background:var(--bd)':''}"><td>${esc(e.label)||'<i class=mut>(none)</i>'}</td><td><span class="pill">${e.role}</span></td><td>${(e.conf*100|0)}%</td></tr>`).join('');
+}
+const go=d=>R&&show(Math.min(Math.max(cur+d,0),R.steps.length-1));
+function play(){if(timer){clearInterval(timer);timer=null;$('pl').textContent='Auto-play';return}$('pl').textContent='Pause';show(0);timer=setInterval(()=>{if(cur>=R.steps.length-1){play();return}go(1)},900)}
+async function bench(){
+  $('bt').innerHTML='<tr><td>Running… (a few seconds)</td></tr>';const r=await post('/api/benchmark',{n:$('n').value});
+  $('bt').innerHTML='<tr><th>Phrasings</th><th>Fallbacks</th><th>Success</th><th>Avg steps</th><th>Step latency p50</th></tr>'+r.map(x=>`<tr><td>${x.vocab}</td><td>${x.fallback?'on':'off'}</td><td><b>${(x.success*100).toFixed(1)}%</b></td><td>${x.steps.toFixed(1)}</td><td>${x.p50_ms.toFixed(1)} ms</td></tr>`).join('');
+}
+async function insp(){
+  const r=await post('/api/inspect',{html:$('ih').value});
+  $('it').innerHTML='<tr><th>Tag/type</th><th>Label</th><th>Role</th><th>Conf.</th></tr>'+r.map(e=>`<tr><td>${e.tag}/${e.type}</td><td>${esc(e.label)}</td><td><span class="pill">${e.role}</span></td><td>${(e.conf*100|0)}%</td></tr>`).join('');
+}
+</script></body></html>
